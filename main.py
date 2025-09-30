@@ -11,7 +11,7 @@ from dotenv import load_dotenv
 # ----------------------------
 # Load Environment Variables
 # ----------------------------
-load_dotenv()  # reads .env file
+load_dotenv()
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 CHANNEL_ID = os.getenv("CHANNEL_ID")
 
@@ -21,26 +21,31 @@ CHANNEL_ID = os.getenv("CHANNEL_ID")
 LOG_FILE = r"C:\Me\Learning\Python\happyclub\quotes_log.txt"
 
 # ----------------------------
-# APIs for Quotes
+# APIs for Quotes (with min 7 words filter)
 # ----------------------------
-def get_random_quote():
+def get_random_quote(min_words=7):
     apis = ["zen", "favqs", "quotable"]
-    choice = random.choice(apis)
+    for _ in range(5):  # try up to 5 times to get a valid quote
+        choice = random.choice(apis)
+        try:
+            if choice == "zen":
+                data = requests.get("https://zenquotes.io/api/random", timeout=10).json()[0]
+                quote = f'"{data["q"]}" — {data["a"]}'
+            elif choice == "favqs":
+                data = requests.get("https://favqs.com/api/qotd", timeout=10).json()
+                quote = f'"{data["quote"]["body"]}" — {data["quote"]["author"]}'
+            elif choice == "quotable":
+                data = requests.get("https://api.quotable.io/random", timeout=10).json()
+                quote = f'"{data["content"]}" — {data["author"]}'
+            else:
+                continue
 
-    try:
-        if choice == "zen":
-            data = requests.get("https://zenquotes.io/api/random", timeout=10).json()[0]
-            return f'"{data["q"]}" — {data["a"]}'
-
-        elif choice == "favqs":
-            data = requests.get("https://favqs.com/api/qotd", timeout=10).json()
-            return f'"{data["quote"]["body"]}" — {data["quote"]["author"]}'
-
-        elif choice == "quotable":
-            data = requests.get("https://api.quotable.io/random", timeout=10).json()
-            return f'"{data["content"]}" — {data["author"]}'
-    except:
-        return "Stay motivated! 💪"
+            # Check minimum word count
+            if len(quote.split()) >= min_words:
+                return quote
+        except:
+            continue
+    return "Stay motivated! 💪"
 
 # ----------------------------
 # Logging to avoid repeats
@@ -59,15 +64,13 @@ def is_duplicate(quote):
 # Generate Image with Quote (Larger Text)
 # ----------------------------
 def create_quote_image(text):
-    # Random background color
     bg_colors = [(25,25,25), (40, 90, 150), (120, 20, 60), (50,150,100), (180,120,40)]
     bg_color = random.choice(bg_colors)
     img = Image.new("RGB", (800, 600), color=bg_color)
     draw = ImageDraw.Draw(img)
 
-    # Random font
     fonts = ["arial.ttf", "times.ttf", "calibri.ttf"]
-    font_size = 60  # starting large
+    font_size = 60
     try:
         font = ImageFont.truetype(random.choice(fonts), font_size)
     except:
@@ -76,11 +79,12 @@ def create_quote_image(text):
 
     wrapped_text = textwrap.fill(text, width=30)
 
-    # Dynamically reduce font size if text too tall
+    # Resize but don't go below min size
+    MIN_FONT_SIZE = 30
     while True:
         bbox = draw.multiline_textbbox((0, 0), wrapped_text, font=font)
         text_height = bbox[3] - bbox[1]
-        if text_height < img.height * 0.8 or font_size <= 20:
+        if text_height < img.height * 0.8 or font_size <= MIN_FONT_SIZE:
             break
         font_size -= 2
         try:
@@ -88,7 +92,6 @@ def create_quote_image(text):
         except:
             font = ImageFont.load_default()
 
-    # Center text
     text_width = bbox[2] - bbox[0]
     text_height = bbox[3] - bbox[1]
     x = (img.width - text_width) / 2
@@ -96,7 +99,6 @@ def create_quote_image(text):
 
     draw.multiline_text((x, y), wrapped_text, font=font, fill="white", align="center")
 
-    # Save image
     filename = f"quote_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
     img.save(filename)
     return filename
@@ -132,8 +134,9 @@ def post_quote():
 # ----------------------------
 if __name__ == "__main__":
     scheduler = BlockingScheduler(timezone=pytz.timezone("Asia/Kolkata"))
-    scheduler.add_job(post_quote, "interval", seconds=30)  # for testing
-    # For daily posting at 7 AM, use:
-    # scheduler.add_job(post_quote, "cron", hour=7, minute=0)
+    
+    # Run every 3 hours
+    scheduler.add_job(post_quote, "interval", hours=3)
+    
     print("Quote bot started...")
     scheduler.start()
