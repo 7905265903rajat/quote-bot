@@ -78,26 +78,33 @@ def is_duplicate(quote):
 # Generate Quote Image + Watermark
 # ----------------------------
 def create_quote_image(text):
-    bg_colors = [(25,25,25), (40, 90, 150), (120, 20, 60), (50,150,100), (180,120,40)]
+    bg_colors = [(25,25,25), (40,90,150), (120,20,60), (50,150,100), (180,120,40)]
     bg_color = random.choice(bg_colors)
     img = Image.new("RGB", (800, 600), color=bg_color)
     draw = ImageDraw.Draw(img)
 
     fonts = ["arial.ttf", "times.ttf", "calibri.ttf"]
-    font_size = 60
+
+    # --- Font logic ---
+    base_size = 80
+    min_size = 40
     try:
-        font = ImageFont.truetype(random.choice(fonts), font_size)
+        font = ImageFont.truetype(random.choice(fonts), base_size)
     except:
         font = ImageFont.load_default()
-        font_size = 20
+        base_size = 25
 
-    wrapped_text = textwrap.fill(text, width=30)
+    # Extra boost for very short quotes
+    if len(text.split()) < 12:
+        base_size += 20
 
-    MIN_FONT_SIZE = 30
+    wrapped_text = textwrap.fill(text, width=28)
+
+    font_size = base_size
     while True:
         bbox = draw.multiline_textbbox((0, 0), wrapped_text, font=font)
         text_height = bbox[3] - bbox[1]
-        if text_height < img.height * 0.8 or font_size <= MIN_FONT_SIZE:
+        if text_height <= img.height * 0.75 or font_size <= min_size:
             break
         font_size -= 2
         try:
@@ -105,6 +112,8 @@ def create_quote_image(text):
         except:
             font = ImageFont.load_default()
 
+    # --- Centering ---
+    bbox = draw.multiline_textbbox((0, 0), wrapped_text, font=font)
     text_width = bbox[2] - bbox[0]
     text_height = bbox[3] - bbox[1]
     x = (img.width - text_width) / 2
@@ -112,10 +121,10 @@ def create_quote_image(text):
 
     draw.multiline_text((x, y), wrapped_text, font=font, fill="white", align="center")
 
-    # Add watermark @rajat0323
+    # --- Watermark ---
     watermark_text = "@rajat0323"
     try:
-        watermark_font = ImageFont.truetype("arial.ttf", 25)
+        watermark_font = ImageFont.truetype("arial.ttf", 28)
     except:
         watermark_font = ImageFont.load_default()
     bbox_w = draw.textbbox((0,0), watermark_text, font=watermark_font)
@@ -150,7 +159,7 @@ def send_poll(question, options):
         "chat_id": CHANNEL_ID,
         "question": question,
         "options": json.dumps(options),
-        "is_anonymous": True  # must be True for channel
+        "is_anonymous": True
     }
     response = requests.post(url, data=payload)
     print("Poll response:", response.json())
